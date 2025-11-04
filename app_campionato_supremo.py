@@ -271,6 +271,11 @@ elif pagina == "📋 Classifica":
     
     html_completo = """
     <style>
+    body {
+        margin: 0;
+        padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
     .classifica-row {
         display: flex !important;
         align-items: center;
@@ -356,9 +361,9 @@ elif pagina == "📋 Classifica":
     </div>
     """
     
-   import streamlit.components.v1 as components
-components.html(html_completo, height=1000, scrolling=True)
-
+    # CORREZIONE: Usa components.html invece di st.markdown
+    import streamlit.components.v1 as components
+    components.html(html_completo, height=1000, scrolling=True)
     
     st.success("✅ Tutte le 20 squadre inserite")
     
@@ -426,6 +431,7 @@ components.html(html_completo, height=1000, scrolling=True)
             st.session_state.risultati_parziali['Classifica'] = df_ris
             st.success("✅ Simulazione completata!")
             st.dataframe(df_ris, use_container_width=True, hide_index=True)
+
 
 
 # ==================== GIRONI CON VALIDAZIONE ====================
