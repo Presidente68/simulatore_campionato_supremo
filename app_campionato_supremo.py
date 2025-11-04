@@ -232,47 +232,100 @@ elif pagina == "📋 Classifica":
     
     st.info("💡 **Riordina**: Usa le frecce per spostare le squadre")
     
-    # CSS per layout orizzontale forzato + menu visibile
+    # ========== CSS COMPLETO: Layout Orizzontale + Menu Visibile ==========
     st.markdown("""
     <style>
-    /* Layout orizzontale forzato anche su mobile */
+    /* ===== LAYOUT ORIZZONTALE FORZATO SU MOBILE ===== */
+    
+    /* Forza le colonne a rimanere orizzontali */
     div[data-testid="column"] {
         min-width: fit-content !important;
+        flex: 0 0 auto !important;
     }
     
-    /* Pulsanti compatti */
+    /* Container delle righe */
+    .row-widget.stHorizontal {
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+    }
+    
+    /* Pulsanti frecce compatti */
     button[kind="secondary"] {
         padding: 4px 8px !important;
         min-width: 36px !important;
+        max-width: 36px !important;
         height: 36px !important;
         font-size: 18px !important;
     }
     
-    /* MENU HAMBURGER PIÙ VISIBILE */
+    /* Forza layout orizzontale anche su schermi piccoli */
+    @media (max-width: 640px) {
+        div[data-testid="column"] {
+            width: auto !important;
+            min-width: unset !important;
+        }
+        
+        /* Prima colonna (nome squadra) */
+        div[data-testid="column"]:first-child {
+            flex: 1 !important;
+            min-width: 0 !important;
+        }
+        
+        /* Seconda e terza colonna (frecce) */
+        div[data-testid="column"]:nth-child(2),
+        div[data-testid="column"]:nth-child(3) {
+            flex: 0 0 40px !important;
+            max-width: 40px !important;
+        }
+        
+        button[kind="secondary"] {
+            padding: 2px 4px !important;
+            min-width: 32px !important;
+            max-width: 32px !important;
+            height: 32px !important;
+            font-size: 16px !important;
+        }
+    }
+    
+    /* ===== MENU HAMBURGER PIÙ VISIBILE ===== */
+    
+    /* Pulsante menu con sfondo */
     button[data-testid="baseButton-header"] {
         background-color: rgba(33, 128, 141, 0.1) !important;
         padding: 8px 12px !important;
         border-radius: 6px !important;
+        border: 1px solid rgba(33, 128, 141, 0.2) !important;
     }
     
+    /* Aggiunge scritta "MENU" dopo le icone */
     button[data-testid="baseButton-header"]::after {
         content: " MENU";
         font-size: 12px;
         font-weight: 600;
         color: #21808d;
-        margin-left: 4px;
+        margin-left: 6px;
     }
     
+    /* Effetto hover sul menu */
     button[data-testid="baseButton-header"]:hover {
         background-color: rgba(33, 128, 141, 0.2) !important;
+        border-color: rgba(33, 128, 141, 0.4) !important;
+    }
+    
+    /* Su mobile rende il MENU ancora più visibile */
+    @media (max-width: 640px) {
+        button[data-testid="baseButton-header"]::after {
+            font-size: 11px;
+            font-weight: 700;
+        }
     }
     </style>
     """, unsafe_allow_html=True)
     
-    # Rendering squadre con pulsanti Streamlit nativi
+    # ========== RENDERING SQUADRE CON PULSANTI NATIVI ==========
     for i in range(20):
-        # Usa proporzioni decimali per forzare layout orizzontale
-        col_nome, col_up, col_down = st.columns([0.75, 0.125, 0.125])
+        # Usa proporzioni decimali ottimizzate per mobile
+        col_nome, col_up, col_down = st.columns([0.7, 0.15, 0.15])
         
         with col_nome:
             st.markdown(f"**{i+1}. {st.session_state.classifica_list[i]}**")
@@ -291,6 +344,7 @@ elif pagina == "📋 Classifica":
     
     st.success("✅ Tutte le 20 squadre inserite")
     
+    # ========== PULSANTE SIMULAZIONE ==========
     with c2:
         simula_class = st.button("🧮 Simula Classifica", type="primary")
     
@@ -355,6 +409,7 @@ elif pagina == "📋 Classifica":
             st.session_state.risultati_parziali['Classifica'] = df_ris
             st.success("✅ Simulazione completata!")
             st.dataframe(df_ris, use_container_width=True, hide_index=True)
+
 
 
 
