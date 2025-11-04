@@ -265,11 +265,206 @@ elif pagina == "📋 Classifica":
 # Per brevità non ripeto qui il codice identico - il resto rimane invariato
 
 elif pagina.startswith("⚽ Girone"):
-    st.info("Sezione Gironi - Codice identico al file precedente")
+    num = pagina.split()[-1]
+    nome = f"Giocatori_{num}"
+    
+    if num == "1":
+        gol_medi = GOL_MEDI_GIOCATORI_1
+        previsioni = PREVISIONI_GIOCATORI_1
+    elif num == "2":
+        gol_medi = GOL_MEDI_GIOCATORI_2
+        previsioni = PREVISIONI_GIOCATORI_2
+    elif num == "3":
+        gol_medi = GOL_MEDI_GIOCATORI_3
+        previsioni = PREVISIONI_GIOCATORI_3
+    elif num == "4":
+        gol_medi = GOL_MEDI_GIOCATORI_4
+        previsioni = PREVISIONI_GIOCATORI_4
+    else:
+        gol_medi = GOL_MEDI_GIOCATORI_5
+        previsioni = PREVISIONI_GIOCATORI_5
+    
+    st.header(f"⚽ {nome}")
+    
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        if st.button(f"🔄 Reset {nome}", key=f"rst_{nome}"):
+            st.session_state.gol_giocatori[nome] = gol_medi.copy()
+            if nome in st.session_state.risultati_parziali:
+                del st.session_state.risultati_parziali[nome]
+            st.session_state.errori_validazione = {}
+            st.rerun()
+    
+    st.info("💡 **Validazione attiva**: Inserisci SOLO numeri interi da 0 a 50")
+    
+    st.markdown("<style>.error-gol {color: red; font-size: 11px; margin-top: -8px; font-weight: bold;}</style>", unsafe_allow_html=True)
+    
+    errori_presenti = False
+    
+    for gioc in gol_medi.keys():
+        col_g, col_gol = st.columns([2, 1])
+        
+        with col_g:
+            st.write(f"**{gioc}**")
+            if previsioni and gioc in previsioni:
+                prev_list = [f"{p}: {previsioni[gioc][p]}" for p in PARTECIPANTI if p in previsioni[gioc]]
+                st.caption(" | ".join(prev_list))
+        
+        with col_gol:
+            val_att = st.session_state.gol_giocatori[nome][gioc]
+            inp = st.text_input("Gol", value=str(int(val_att)), key=f"{nome}_{gioc}", label_visibility="collapsed")
+            
+            is_valid, valore, msg_err = valida_numero_gol(inp)
+            
+            if is_valid:
+                st.session_state.gol_giocatori[nome][gioc] = valore
+                if f"{nome}_{gioc}" in st.session_state.errori_validazione:
+                    del st.session_state.errori_validazione[f"{nome}_{gioc}"]
+            else:
+                st.session_state.errori_validazione[f"{nome}_{gioc}"] = msg_err
+                errori_presenti = True
+                st.markdown(f"<p class='error-gol'>{msg_err}</p>", unsafe_allow_html=True)
+    
+    with c2:
+        simula_gir = st.button(f"🧮 Simula {nome}", type="primary", key=f"sim_{nome}", disabled=errori_presenti)
+    
+    if errori_presenti:
+        st.error("⚠️ Correggi gli errori prima di simulare")
+    
+    if simula_gir and not errori_presenti:
+        with st.spinner(f"Calcolo {nome}..."):
+            pg = {}
+            for part in PARTECIPANTI:
+                tot = 0
+                for gioc in gol_medi.keys():
+                    if gioc in previsioni and part in previsioni[gioc]:
+                        pron = previsioni[gioc][part]
+                        reale = st.session_state.gol_giocatori[nome][gioc]
+                        tot += calcola_punteggio_giocatore(pron, reale)
+                pg[part] = tot
+            
+            df_ris = pd.DataFrame(list(pg.items()), columns=['Partecipante', 'Assoluti'])
+            df_ris = df_ris.sort_values('Assoluti', ascending=False)
+            max_ass = df_ris['Assoluti'].max()
+            df_ris['Supremi'] = ((df_ris['Assoluti'] / max_ass) * K_FACTOR).round().astype(int) if max_ass > 0 else 0
+            
+            st.session_state.risultati_parziali[nome] = df_ris
+            st.success("✅ Simulazione completata!")
+            st.dataframe(df_ris, use_container_width=True, hide_index=True)
 
 elif pagina == "📈 Risultati":
-    st.info("Sezione Risultati - Codice identico al file precedente")
+    st.header("🏆 Risultati Finali")
+    st.info("📊 Calcola i risultati finali con tutti i dati inseriti")
+    
+    if st.button("🧮 Calcola Totale", type="primary", use_container_width=True):
+        with st.spinner("Calcolo totale..."):
+            punt_gir = {p: {} for p in PARTECIPANTI}
+            
+            for n in range(1, 6):
+                nome = f"Giocatori_{n}"
+                if n == 1:
+                    prev = PREVISIONI_GIOCATORI_1
+                elif n == 2:
+                    prev = PREVISIONI_GIOCATORI_2
+                elif n == 3:
+                    prev = PREVISIONI_GIOCATORI_3
+                elif n == 4:
+                    prev = PREVISIONI_GIOCATORI_4
+                else:
+                    prev = PREVISIONI_GIOCATORI_5
+                
+                for p in PARTECIPANTI:
+                    tot = 0
+                    for gioc, pd_dict in prev.items():
+                        if p in pd_dict:
+                            pron = pd_dict[p]
+                            reale = st.session_state.gol_giocatori[nome][gioc]
+                            tot += calcola_punteggio_giocatore(pron, reale)
+                    punt_gir[p][f"Girone {n}"] = tot
+            
+            mappa_reali = {sq: i+1 for i, sq in enumerate(st.session_state.classifica_list)}
+            mappe_prev = {}
+            for p in PARTECIPANTI:
+                m = {}
+                for sq in st.session_state.classifica_list:
+                    for pos, d in PREVISIONI_CLASSIFICA.items():
+                        if d.get(p) == sq:
+                            m[sq] = pos
+                            break
+                mappe_prev[p] = m
+            
+            punti_class = {}
+            for p in PARTECIPANTI:
+                tot = bonus = cc = 0
+                for sq in st.session_state.classifica_list:
+                    reale = mappa_reali[sq]
+                    prev = mappe_prev[p].get(sq, 99)
+                    err = abs(prev - reale)
+                    tot += calcola_punteggio_base_squadra(prev, reale)
+                    if err == 0:
+                        if reale == 1:
+                            bonus += 10
+                        elif 2 <= reale <= 4:
+                            bonus += 3
+                        elif 5 <= reale <= 6:
+                            bonus += 2
+                        elif 18 <= reale <= 20:
+                            bonus += 4
+                    altri = [mappe_prev[x].get(sq, 99) for x in PARTECIPANTI if x != p]
+                    pmc = np.mean(altri)
+                    if abs(prev - pmc) >= SOGLIA_POSIZIONE_CONTROCORRENTE:
+                        if err == 0:
+                            cc += 5
+                        elif err == 1:
+                            cc += 3
+                        elif err > 2 and err > abs(round(pmc) - reale):
+                            cc -= 5
+                punti_class[p] = tot + bonus + cc
+            
+            max_p = max(punti_class.values())
+            orac = [p for p, pt in punti_class.items() if pt == max_p]
+            if orac:
+                bo = math.ceil(10 / len(orac))
+                for o in orac:
+                    punti_class[o] += bo
+            
+            df_int = pd.DataFrame(punt_gir).T
+            df_int['Classifica Squadre'] = pd.Series(punti_class)
+            
+            df_sup = pd.DataFrame(index=PARTECIPANTI)
+            for col in df_int.columns:
+                mv = df_int[col].max()
+                df_sup[col] = ((df_int[col] / mv) * K_FACTOR).round().astype(int) if mv > 0 else 0
+            
+            df_tab_sup = df_sup.copy()
+            df_tab_sup['Totali Supremi'] = df_sup.sum(axis=1)
+            df_tab_sup = df_tab_sup.sort_values('Totali Supremi', ascending=False)
+            co = ['Totali Supremi', 'Classifica Squadre'] + [f'Girone {i}' for i in range(1, 6)]
+            df_tab_sup = df_tab_sup[[c for c in co if c in df_tab_sup.columns]]
+            
+            df_tab_ass = df_int.copy()
+            df_tab_ass['Totali Assoluti'] = df_int.sum(axis=1)
+            df_tab_ass = df_tab_ass.reindex(df_tab_sup.index)
+            coa = ['Totali Assoluti', 'Classifica Squadre'] + [f'Girone {i}' for i in range(1, 6)]
+            df_tab_ass = df_tab_ass[[c for c in coa if c in df_tab_ass.columns]]
+        
+        st.success("✅ Calcolo completato!")
+        
+        st.subheader("🏆 Classifica Suprema")
+        st.dataframe(df_tab_sup, use_container_width=True)
+        
+        st.subheader("📊 Classifica Assoluta")
+        st.dataframe(df_tab_ass, use_container_width=True)
+        
+        st.subheader("💾 Download")
+        out = BytesIO()
+        with pd.ExcelWriter(out, engine='openpyxl') as w:
+            df_tab_sup.to_excel(w, sheet_name='Suprema')
+            df_tab_ass.to_excel(w, sheet_name='Assoluta')
+        out.seek(0)
+        
+        st.download_button("📥 Scarica Excel", data=out.getvalue(), file_name="Risultati_Campionato_Supremo.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("⚽ **Campionato Supremo v10.0 FINALE**")
-st.sidebar.caption("Riordino con Frecce ⬆️⬇️")
+st.sidebar.markdown("⚽ **Campionato Supremo v10.1 FINALE**")
+st.sidebar.caption("Frecce Compatte + Codice Completo")
