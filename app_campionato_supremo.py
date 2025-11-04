@@ -1,5 +1,5 @@
-# App Campionato Supremo - VERSIONE FINALE COMPLETA
-# Con Rimozione Automatica Duplicati (Trello-style) + Validazione Gol
+# App Campionato Supremo - VERSIONE FINALE v9.0
+# Classifica con Selectbox + Bottone Cambia (100% Funzionale)
 
 import streamlit as st
 import pandas as pd
@@ -90,55 +90,6 @@ def calcola_punteggio_base_squadra(prevista, reale):
     errore = abs(prevista - reale)
     return max(0, 10 - (errore ** 2))
 
-def autocomplete_squadra(input_text):
-    """Autocomplete intelligente - cerca su TUTTE le squadre"""
-    if not input_text:
-        return []
-    
-    input_lower = input_text.lower().strip()
-    if not input_lower:
-        return []
-    
-    # Match esatto
-    if input_text in SQUADRE:
-        return [input_text]
-    
-    # Case-insensitive esatto
-    exact = [s for s in SQUADRE if s.lower() == input_lower]
-    if exact:
-        return exact
-    
-    # Inizia con
-    starts = [s for s in SQUADRE if s.lower().startswith(input_lower)]
-    if starts:
-        return starts[:5]
-    
-    # Contiene
-    contains = [s for s in SQUADRE if input_lower in s.lower()]
-    if contains:
-        return contains[:5]
-    
-    # Primo carattere
-    first_char = [s for s in SQUADRE if s[0].lower() == input_lower[0]]
-    if first_char:
-        return first_char[:5]
-    
-    return []
-
-def rimuovi_duplicati_classifica(classifica, posizione_corrente, nuova_squadra):
-    """Rimuove duplicati mantenendo solo l'ultima posizione inserita (Trello-style)"""
-    nuova_classifica = classifica.copy()
-    
-    # Se la squadra è già presente altrove, rimuovila
-    for i, sq in enumerate(nuova_classifica):
-        if i != posizione_corrente and sq == nuova_squadra:
-            # Sostituisci con prima squadra disponibile
-            usate = set(nuova_classifica)
-            disponibili = [s for s in SQUADRE if s not in usate]
-            nuova_classifica[i] = disponibili[0] if disponibili else ""
-    
-    return nuova_classifica
-
 def valida_numero_gol(input_str):
     """Valida input gol - restituisce (is_valid, valore, messaggio_errore)"""
     if not input_str or input_str.strip() == "":
@@ -202,7 +153,7 @@ if pagina == "🏆 Dashboard":
             with st.expander(f"🏆 {sez}"):
                 st.dataframe(ris, use_container_width=True, hide_index=True)
 
-# ==================== CLASSIFICA CON RIMOZIONE DUPLICATI TRELLO-STYLE ====================
+# ==================== CLASSIFICA CON SELECTBOX + BOTTONE ====================
 
 elif pagina == "📋 Classifica":
     st.header("🏟️ Classifica Squadre")
@@ -211,75 +162,81 @@ elif pagina == "📋 Classifica":
     with c1:
         if st.button("🔄 Reset Classifica"):
             st.session_state.classifica_list = CLASSIFICA_DEFAULT.copy()
+            # Reset stati editing
+            for i in range(20):
+                if f"editing_{i}" in st.session_state:
+                    del st.session_state[f"editing_{i}"]
             if 'Classifica' in st.session_state.risultati_parziali:
                 del st.session_state.risultati_parziali['Classifica']
             st.rerun()
     
-    st.info("💡 **Autocomplete + rimozione duplicati automatica**: Inizia a scrivere e clicca sul suggerimento")
-    
-    st.markdown("""
-    <style>
-    .stTextInput input {font-size: 14px;}
-    </style>
-    """, unsafe_allow_html=True)
-    
-    nuova_classifica = st.session_state.classifica_list.copy()
+    st.info("💡 **Click 'Cambia' per modificare** - Selectbox facilmente navigabile con tastiera")
     
     for i in range(20):
-        col_pos, col_input, col_sugg = st.columns([0.3, 2, 2])
+        col_pos, col_sq, col_btn = st.columns([0.3, 2.5, 1.2])
         
         with col_pos:
             st.write(f"**{i+1}ª**")
         
-        with col_input:
-            squadra_corrente = st.session_state.classifica_list[i]
-            input_sq = st.text_input("Squadra", value=squadra_corrente, key=f"input_pos_{i}", label_visibility="collapsed", placeholder="Scrivi nome squadra...")
-            
-            # Se l'input è valido e diverso, aggiorna
-            if input_sq in SQUADRE and input_sq != squadra_corrente:
-                nuova_classifica = rimuovi_duplicati_classifica(nuova_classifica, i, input_sq)
-                nuova_classifica[i] = input_sq
-                st.session_state.classifica_list = nuova_classifica
-                st.rerun()
-            
-            # Autocomplete
-            if input_sq != squadra_corrente or input_sq not in SQUADRE:
-                suggerimenti = autocomplete_squadra(input_sq)
-                squadre_usate = set(nuova_classifica) - {squadra_corrente}
-                suggerimenti_disp = [s for s in suggerimenti if s not in squadre_usate]
+        with col_sq:
+            st.write(f"**{st.session_state.classifica_list[i]}**")
+        
+        with col_btn:
+            if st.button("🔄 Cambia", key=f"chg_{i}", use_container_width=True):
+                st.session_state[f"editing_{i}"] = not st.session_state.get(f"editing_{i}", False)
+        
+        # Modalità editing con selectbox
+        if st.session_state.get(f"editing_{i}", False):
+            with st.container():
+                usate = set(st.session_state.classifica_list) - {st.session_state.classifica_list[i]}
+                disponibili = [s for s in SQUADRE if s not in usate]
                 
-                with col_sugg:
-                    if suggerimenti and input_sq:
-                        if suggerimenti_disp:
-                            st.caption("🔍 Suggerimenti:")
-                            for sug in suggerimenti_disp[:5]:
-                                if st.button(f"✓ {sug}", key=f"sug_{i}_{sug}", use_container_width=True):
-                                    nuova_classifica = rimuovi_duplicati_classifica(nuova_classifica, i, sug)
-                                    nuova_classifica[i] = sug
-                                    st.session_state.classifica_list = nuova_classifica
-                                    st.rerun()
-                        elif suggerimenti:
-                            st.caption("⚠️ Squadra già inserita")
+                nuova = st.selectbox(
+                    f"Nuova squadra per posizione {i+1}",
+                    options=[st.session_state.classifica_list[i]] + disponibili,
+                    key=f"sel_{i}"
+                )
+                
+                col_ok, col_ann = st.columns(2)
+                with col_ok:
+                    if st.button("✅ Conferma", key=f"ok_{i}", use_container_width=True):
+                        if nuova != st.session_state.classifica_list[i]:
+                            # Rimuovi duplicati se presenti
+                            for j in range(20):
+                                if j != i and st.session_state.classifica_list[j] == nuova:
+                                    usate_temp = set(st.session_state.classifica_list)
+                                    disp_temp = [s for s in SQUADRE if s not in usate_temp]
+                                    st.session_state.classifica_list[j] = disp_temp[0] if disp_temp else ""
+                            
+                            st.session_state.classifica_list[i] = nuova
+                        
+                        st.session_state[f"editing_{i}"] = False
+                        st.rerun()
+                
+                with col_ann:
+                    if st.button("❌ Annulla", key=f"ann_{i}", use_container_width=True):
+                        st.session_state[f"editing_{i}"] = False
+                        st.rerun()
     
     # Validazione
-    squadre_uniche = set(nuova_classifica)
-    if len(squadre_uniche) < 20:
-        st.warning(f"⚠️ Attenzione: {20 - len(squadre_uniche)} squadre mancanti o duplicate")
-        mancanti = [sq for sq in SQUADRE if sq not in squadre_uniche]
-        if mancanti:
-            st.error(f"**Squadre mancanti**: {', '.join(mancanti)}")
+    squadre_valide = [s for s in st.session_state.classifica_list if s in SQUADRE]
+    
+    if len(squadre_valide) < 20:
+        st.warning(f"⚠️ Inserite {len(squadre_valide)}/20 squadre")
+    else:
+        st.success("✅ Tutte le 20 squadre inserite correttamente")
     
     with c2:
-        simula_class = st.button("🧮 Simula Classifica", type="primary", disabled=(len(squadre_uniche) < 20))
+        simula_class = st.button("🧮 Simula Classifica", type="primary", disabled=(len(squadre_valide) < 20))
     
-    if simula_class and len(squadre_uniche) == 20:
+    if simula_class and len(squadre_valide) == 20:
         with st.spinner("Calcolo classifica..."):
-            mappa_reali = {sq: i+1 for i, sq in enumerate(nuova_classifica)}
+            mappa_reali = {sq: i+1 for i, sq in enumerate(st.session_state.classifica_list)}
             mappe_prev = {}
             
             for part in PARTECIPANTI:
                 mappa = {}
-                for sq in nuova_classifica:
+                for sq in st.session_state.classifica_list:
                     for pos, d in PREVISIONI_CLASSIFICA.items():
                         if d.get(part) == sq:
                             mappa[sq] = pos
@@ -289,7 +246,7 @@ elif pagina == "📋 Classifica":
             punti_class = {}
             for part in PARTECIPANTI:
                 tot = bonus = cc = 0
-                for sq in nuova_classifica:
+                for sq in st.session_state.classifica_list:
                     reale = mappa_reali[sq]
                     prev = mappe_prev[part].get(sq, 99)
                     err = abs(prev - reale)
@@ -544,5 +501,5 @@ elif pagina == "📈 Risultati":
         st.download_button("📥 Scarica Excel", data=out.getvalue(), file_name="Risultati_Campionato_Supremo.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("⚽ **Campionato Supremo v8.0 FINALE**")
-st.sidebar.caption("Autocomplete + Rimozione Duplicati Automatica + Validazione")
+st.sidebar.markdown("⚽ **Campionato Supremo v9.0 FINALE**")
+st.sidebar.caption("Selectbox Editabile + Rimozione Duplicati + Validazione")
