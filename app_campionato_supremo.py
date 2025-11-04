@@ -229,26 +229,133 @@ elif pagina == "📋 Classifica":
                 del st.session_state.risultati_parziali['Classifica']
             st.rerun()
     
-    st.info("💡 **Riordina**: ⬆️ su | ⬇️ giù")
+    st.info("💡 **Riordina**: Click sui pulsanti freccia per spostare le squadre")
     
-    # Layout compatto ottimizzato per mobile
+    # Gestione azioni dai query params
+    params = st.query_params
+    if "action" in params and "pos" in params:
+        try:
+            pos = int(params["pos"])
+            action = params["action"]
+            
+            if action == "up" and pos > 0:
+                st.session_state.classifica_list[pos], st.session_state.classifica_list[pos-1] = \
+                    st.session_state.classifica_list[pos-1], st.session_state.classifica_list[pos]
+            elif action == "down" and pos < 19:
+                st.session_state.classifica_list[pos], st.session_state.classifica_list[pos+1] = \
+                    st.session_state.classifica_list[pos+1], st.session_state.classifica_list[pos]
+            
+            st.query_params.clear()
+            st.rerun()
+        except:
+            pass
+    
+    # RENDERING HTML PURO - Layout orizzontale garantito
+    html_rows = []
     for i in range(20):
-        cols = st.columns([5, 1, 1])
+        squadra = st.session_state.classifica_list[i]
+        up_disabled = "disabled" if i == 0 else ""
+        down_disabled = "disabled" if i == 19 else ""
         
-        with cols[0]:
-            st.write(f"**{i+1}. {st.session_state.classifica_list[i]}**")
-        
-        with cols[1]:
-            if st.button("⬆️", key=f"up_{i}", disabled=(i == 0), help="Sposta su"):
-                st.session_state.classifica_list[i], st.session_state.classifica_list[i-1] = \
-                    st.session_state.classifica_list[i-1], st.session_state.classifica_list[i]
-                st.rerun()
-        
-        with cols[2]:
-            if st.button("⬇️", key=f"down_{i}", disabled=(i == 19), help="Sposta giù"):
-                st.session_state.classifica_list[i], st.session_state.classifica_list[i+1] = \
-                    st.session_state.classifica_list[i+1], st.session_state.classifica_list[i]
-                st.rerun()
+        row = f"""
+        <div class="classifica-row">
+            <div class="classifica-nome">{i+1}. {squadra}</div>
+            <div class="classifica-buttons">
+                <a href="?action=up&pos={i}" class="btn-freccia {up_disabled}">⬆️</a>
+                <a href="?action=down&pos={i}" class="btn-freccia {down_disabled}">⬇️</a>
+            </div>
+        </div>
+        """
+        html_rows.append(row)
+    
+    html_completo = """
+    <style>
+    .classifica-row {
+        display: flex !important;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 12px;
+        margin: 4px 0;
+        background: linear-gradient(to right, #f8f9fa, #ffffff);
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        transition: box-shadow 0.2s;
+    }
+    .classifica-row:hover {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .classifica-nome {
+        flex: 1;
+        font-weight: 600;
+        font-size: 16px;
+        color: #212529;
+        min-width: 0;
+    }
+    .classifica-buttons {
+        display: flex !important;
+        gap: 6px;
+        flex-shrink: 0;
+        margin-left: 12px;
+    }
+    .btn-freccia {
+        width: 36px;
+        height: 36px;
+        min-width: 36px;
+        border: 1px solid #ced4da;
+        background: #fff;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 18px;
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+        color: #495057;
+        transition: all 0.2s;
+    }
+    .btn-freccia:hover:not(.disabled) {
+        background: #e9ecef;
+        border-color: #adb5bd;
+        transform: scale(1.05);
+    }
+    .btn-freccia:active:not(.disabled) {
+        transform: scale(0.95);
+    }
+    .btn-freccia.disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+        pointer-events: none;
+        background: #f8f9fa;
+    }
+    
+    /* Media query per garantire layout orizzontale anche su mobile */
+    @media (max-width: 640px) {
+        .classifica-row {
+            flex-wrap: nowrap !important;
+            min-height: 48px;
+        }
+        .classifica-nome {
+            font-size: 14px;
+            padding-right: 8px;
+        }
+        .classifica-buttons {
+            gap: 4px;
+            margin-left: 8px;
+        }
+        .btn-freccia {
+            width: 32px;
+            height: 32px;
+            min-width: 32px;
+            font-size: 16px;
+        }
+    }
+    </style>
+    <div class="classifica-container">
+    """ + "\n".join(html_rows) + """
+    </div>
+    """
+    
+    st.markdown(html_completo, unsafe_allow_html=True)
     
     st.success("✅ Tutte le 20 squadre inserite")
     
@@ -316,6 +423,7 @@ elif pagina == "📋 Classifica":
             st.session_state.risultati_parziali['Classifica'] = df_ris
             st.success("✅ Simulazione completata!")
             st.dataframe(df_ris, use_container_width=True, hide_index=True)
+
 
 # ==================== GIRONI CON VALIDAZIONE ====================
 
