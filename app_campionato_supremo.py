@@ -221,24 +221,25 @@ if pagina == "🏆 Dashboard":
 elif pagina == "📋 Classifica":
     st.header("🏟️ Classifica Squadre")
 
-    # ================== CSS DEFINITIVO v18.0 ==================
+    # ================== CSS v18.1 ==================
     st.markdown("""
     <style>
-    /* --- MENU HAMBURGER PIÙ VISIBILE (Selettore Stabile) --- */
-    /* Questo selettore è più robusto e meno soggetto a cambiamenti */
-    button[data-testid="stSidebarNav-toggle"]::after {
+    /* MENU HAMBURGER VISIBILE */
+    button[data-testid="collapsedControl"] {
+        background-color: rgba(33, 128, 141, 0.15) !important;
+        border: 1px solid rgba(33, 128, 141, 0.3) !important;
+        padding: 8px 12px !important;
+        border-radius: 8px !important;
+    }
+    button[data-testid="collapsedControl"]::after {
         content: " MENU";
         font-size: 12px;
         font-weight: 700;
-        color: #1E8449; /* Verde scuro */
+        color: #21808d;
         margin-left: 6px;
     }
-    button[data-testid="stSidebarNav-toggle"] {
-         background-color: rgba(46, 204, 113, 0.15) !important;
-         border: 1px solid rgba(46, 204, 113, 0.2) !important;
-    }
 
-    /* --- Stili per il componente HTML (Layout Garantito) --- */
+    /* LAYOUT CLASSIFICA HTML */
     .classifica-row {
         display: flex !important;
         align-items: center;
@@ -251,7 +252,7 @@ elif pagina == "📋 Classifica":
         box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
     .classifica-nome {
-        flex-grow: 1; /* Occupa lo spazio disponibile */
+        flex: 1;
         font-weight: 600;
         font-size: 16px;
         color: #212529;
@@ -259,7 +260,7 @@ elif pagina == "📋 Classifica":
     .classifica-buttons {
         display: flex !important;
         gap: 8px;
-        flex-shrink: 0; /* Impedisce ai bottoni di rimpicciolirsi */
+        flex-shrink: 0;
     }
     .btn-freccia {
         width: 36px; height: 36px;
@@ -277,20 +278,18 @@ elif pagina == "📋 Classifica":
     .btn-freccia.disabled { opacity: 0.4; cursor: not-allowed; }
     </style>
     """, unsafe_allow_html=True)
-    # ================== FINE CSS ==================
 
     import streamlit.components.v1 as components
 
-    # Costruisci l'HTML per ogni riga della classifica
+    # Costruisci HTML per ogni riga
     html_rows = []
     for i in range(20):
         squadra = st.session_state.classifica_list[i]
         up_disabled = "disabled" if i == 0 else ""
         down_disabled = "disabled" if i == 19 else ""
         
-        # L'attributo "onclick" chiama la nostra funzione JS, "return false" previene il refresh
-        onclick_up = f"handleClick('up_{i}')" if not up_disabled else ""
-        onclick_down = f"handleClick('down_{i}')" if not down_disabled else ""
+        onclick_up = f"sendAction('up_{i}')" if not up_disabled else ""
+        onclick_down = f"sendAction('down_{i}')" if not down_disabled else ""
 
         html_rows.append(f"""
         <div class="classifica-row">
@@ -302,19 +301,20 @@ elif pagina == "📋 Classifica":
         </div>
         """)
 
-    # Crea il componente HTML che contiene la classifica e lo script
-    # La chiave 'comm_key' è fondamentale per recuperare il valore in Python
+    # Componente HTML SENZA key parameter (causa errore su Python 3.13)
     action_value = components.html(f"""
         <div class="classifica-container">{"".join(html_rows)}</div>
         <script>
-            // Funzione che invia il valore 'action' (es. "up_5") a Streamlit
-            function handleClick(action) {{
-                window.parent.Streamlit.setComponentValue(action);
+            function sendAction(action) {{
+                window.parent.postMessage({{
+                    type: 'streamlit:setComponentValue',
+                    value: action
+                }}, '*');
             }}
         </script>
-    """, height=1100, scrolling=False, key="classifica_actions")
+    """, height=1100, scrolling=False)
 
-    # Questo blocco intercetta l'azione inviata dal JavaScript
+    # Intercetta l'azione
     if action_value:
         action_type, pos_str = action_value.split('_')
         pos = int(pos_str)
@@ -324,20 +324,24 @@ elif pagina == "📋 Classifica":
         elif action_type == "down" and pos < 19:
             st.session_state.classifica_list[pos], st.session_state.classifica_list[pos+1] = st.session_state.classifica_list[pos+1], st.session_state.classifica_list[pos]
         
-        st.rerun() # Ricarica la pagina per mostrare la modifica
+        st.rerun()
 
-    # Questi pulsanti sono fuori dalla lista, quindi st.columns va bene
+    # Pulsanti Reset e Simulazione
     c1, c2 = st.columns([1, 1])
     with c1:
         if st.button("🔄 Reset Classifica"):
             st.session_state.classifica_list = CLASSIFICA_DEFAULT.copy()
+            if 'Classifica' in st.session_state.risultati_parziali:
+                del st.session_state.risultati_parziali['Classifica']
             st.rerun()
 
     with c2:
         if st.button("🧮 Simula Classifica", type="primary"):
-            # Incolla qui il tuo codice per la simulazione
-            with st.spinner("Calcolo in corso..."):
-                 st.success("Simulazione completata!")
+            # Il tuo codice di simulazione qui
+            with st.spinner("Calcolo classifica..."):
+                # [MANTIENI IL TUO CODICE DI CALCOLO COMPLETO QUI]
+                st.success("✅ Simulazione completata!")
+
 
 
 
