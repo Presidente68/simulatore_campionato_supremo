@@ -222,11 +222,12 @@ if pagina == "🏆 Dashboard":
 elif pagina == "📋 Classifica":
     st.header("🏟️ Classifica Squadre")
 
-    # ========= CSS DEFINITIVO v15.0: Forza Layout Mobile + Menu Visibile =========
+    # ================== CSS DEFINITIVO v15.0 ==================
+    # Questo CSS forza il layout orizzontale su mobile e rende il menu visibile.
+    # Usa selettori specifici che Streamlit non può ignorare.
     st.markdown("""
     <style>
-    /* --- SEZIONE MENU HAMBURGER --- */
-    /* Applica a tutte le dimensioni schermo */
+    /* --- MENU HAMBURGER PIÙ VISIBILE --- */
     button[data-testid="baseButton-header"] {
         background-color: rgba(33, 128, 141, 0.1) !important;
         border: 1px solid rgba(33, 128, 141, 0.2) !important;
@@ -244,23 +245,16 @@ elif pagina == "📋 Classifica":
         background-color: rgba(33, 128, 141, 0.2) !important;
     }
 
-    /* --- SEZIONE LAYOUT CLASSIFICA --- */
-    /* Media Query per agire SOLO su schermi piccoli (mobile) */
+    /* --- LAYOUT CLASSIFICA FORZATO SU MOBILE --- */
     @media (max-width: 640px) {
-        /* Seleziona il container di ogni riga e impedisce che vada a capo */
-        .st-emotion-cache-13ln4jf { /* Selettore specifico per il container della riga */
+        /* Seleziona il container di ogni riga e gli impedisce di andare a capo */
+        div[data-testid="stHorizontalBlock"] {
             flex-wrap: nowrap !important;
-        }
-
-        /* Imposta le larghezze fisse per le colonne delle frecce */
-        div[data-testid="column"]:nth-of-type(2),
-        div[data-testid="column"]:nth-of-type(3) {
-            flex: 0 0 42px !important; /* Larghezza fissa per i pulsanti */
         }
     }
     </style>
     """, unsafe_allow_html=True)
-    # ========= FINE CSS =========
+    # ================== FINE CSS ==================
 
     c1, c2 = st.columns([1, 1])
     with c1:
@@ -272,7 +266,7 @@ elif pagina == "📋 Classifica":
 
     st.info("💡 **Riordina**: Usa le frecce per spostare le squadre")
 
-    # Rendering con pulsanti Streamlit nativi (funzionamento garantito)
+    # Rendering con pulsanti Streamlit nativi e proporzioni corrette
     for i in range(20):
         col_nome, col_up, col_down = st.columns([0.7, 0.15, 0.15])
         with col_nome:
@@ -336,8 +330,6 @@ elif pagina == "📋 Classifica":
             st.session_state.risultati_parziali['Classifica'] = df_ris
             st.success("✅ Simulazione completata!")
             st.dataframe(df_ris, use_container_width=True, hide_index=True)
-
-
 
 
 
