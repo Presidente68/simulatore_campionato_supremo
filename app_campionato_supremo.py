@@ -221,7 +221,47 @@ if pagina == "🏆 Dashboard":
 
 elif pagina == "📋 Classifica":
     st.header("🏟️ Classifica Squadre")
-    
+
+    # ========= CSS DEFINITIVO v15.0: Forza Layout Mobile + Menu Visibile =========
+    st.markdown("""
+    <style>
+    /* --- SEZIONE MENU HAMBURGER --- */
+    /* Applica a tutte le dimensioni schermo */
+    button[data-testid="baseButton-header"] {
+        background-color: rgba(33, 128, 141, 0.1) !important;
+        border: 1px solid rgba(33, 128, 141, 0.2) !important;
+        padding: 8px 12px !important;
+        border-radius: 8px !important;
+    }
+    button[data-testid="baseButton-header"]::after {
+        content: " MENU";
+        font-size: 12px;
+        font-weight: 700;
+        color: #21808d;
+        margin-left: 6px;
+    }
+    button[data-testid="baseButton-header"]:hover {
+        background-color: rgba(33, 128, 141, 0.2) !important;
+    }
+
+    /* --- SEZIONE LAYOUT CLASSIFICA --- */
+    /* Media Query per agire SOLO su schermi piccoli (mobile) */
+    @media (max-width: 640px) {
+        /* Seleziona il container di ogni riga e impedisce che vada a capo */
+        .st-emotion-cache-13ln4jf { /* Selettore specifico per il container della riga */
+            flex-wrap: nowrap !important;
+        }
+
+        /* Imposta le larghezze fisse per le colonne delle frecce */
+        div[data-testid="column"]:nth-of-type(2),
+        div[data-testid="column"]:nth-of-type(3) {
+            flex: 0 0 42px !important; /* Larghezza fissa per i pulsanti */
+        }
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    # ========= FINE CSS =========
+
     c1, c2 = st.columns([1, 1])
     with c1:
         if st.button("🔄 Reset Classifica"):
@@ -229,130 +269,33 @@ elif pagina == "📋 Classifica":
             if 'Classifica' in st.session_state.risultati_parziali:
                 del st.session_state.risultati_parziali['Classifica']
             st.rerun()
-    
+
     st.info("💡 **Riordina**: Usa le frecce per spostare le squadre")
-    
-    # ========== CSS COMPLETO: Layout Orizzontale + Menu Visibile ==========
-    st.markdown("""
-    <style>
-    /* ===== LAYOUT ORIZZONTALE FORZATO SU MOBILE ===== */
-    
-    /* Forza le colonne a rimanere orizzontali */
-    div[data-testid="column"] {
-        min-width: fit-content !important;
-        flex: 0 0 auto !important;
-    }
-    
-    /* Container delle righe */
-    .row-widget.stHorizontal {
-        flex-wrap: nowrap !important;
-        overflow-x: auto !important;
-    }
-    
-    /* Pulsanti frecce compatti */
-    button[kind="secondary"] {
-        padding: 4px 8px !important;
-        min-width: 36px !important;
-        max-width: 36px !important;
-        height: 36px !important;
-        font-size: 18px !important;
-    }
-    
-    /* Forza layout orizzontale anche su schermi piccoli */
-    @media (max-width: 640px) {
-        div[data-testid="column"] {
-            width: auto !important;
-            min-width: unset !important;
-        }
-        
-        /* Prima colonna (nome squadra) */
-        div[data-testid="column"]:first-child {
-            flex: 1 !important;
-            min-width: 0 !important;
-        }
-        
-        /* Seconda e terza colonna (frecce) */
-        div[data-testid="column"]:nth-child(2),
-        div[data-testid="column"]:nth-child(3) {
-            flex: 0 0 40px !important;
-            max-width: 40px !important;
-        }
-        
-        button[kind="secondary"] {
-            padding: 2px 4px !important;
-            min-width: 32px !important;
-            max-width: 32px !important;
-            height: 32px !important;
-            font-size: 16px !important;
-        }
-    }
-    
-    /* ===== MENU HAMBURGER PIÙ VISIBILE ===== */
-    
-    /* Pulsante menu con sfondo */
-    button[data-testid="baseButton-header"] {
-        background-color: rgba(33, 128, 141, 0.1) !important;
-        padding: 8px 12px !important;
-        border-radius: 6px !important;
-        border: 1px solid rgba(33, 128, 141, 0.2) !important;
-    }
-    
-    /* Aggiunge scritta "MENU" dopo le icone */
-    button[data-testid="baseButton-header"]::after {
-        content: " MENU";
-        font-size: 12px;
-        font-weight: 600;
-        color: #21808d;
-        margin-left: 6px;
-    }
-    
-    /* Effetto hover sul menu */
-    button[data-testid="baseButton-header"]:hover {
-        background-color: rgba(33, 128, 141, 0.2) !important;
-        border-color: rgba(33, 128, 141, 0.4) !important;
-    }
-    
-    /* Su mobile rende il MENU ancora più visibile */
-    @media (max-width: 640px) {
-        button[data-testid="baseButton-header"]::after {
-            font-size: 11px;
-            font-weight: 700;
-        }
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    # ========== RENDERING SQUADRE CON PULSANTI NATIVI ==========
+
+    # Rendering con pulsanti Streamlit nativi (funzionamento garantito)
     for i in range(20):
-        # Usa proporzioni decimali ottimizzate per mobile
         col_nome, col_up, col_down = st.columns([0.7, 0.15, 0.15])
-        
         with col_nome:
             st.markdown(f"**{i+1}. {st.session_state.classifica_list[i]}**")
-        
         with col_up:
-            if st.button("⬆️", key=f"up_{i}", disabled=(i == 0), help="Sposta su"):
-                st.session_state.classifica_list[i], st.session_state.classifica_list[i-1] = \
-                    st.session_state.classifica_list[i-1], st.session_state.classifica_list[i]
+            if st.button("⬆️", key=f"up_{i}", disabled=(i == 0), use_container_width=True):
+                st.session_state.classifica_list[i], st.session_state.classifica_list[i-1] = st.session_state.classifica_list[i-1], st.session_state.classifica_list[i]
                 st.rerun()
-        
         with col_down:
-            if st.button("⬇️", key=f"down_{i}", disabled=(i == 19), help="Sposta giù"):
-                st.session_state.classifica_list[i], st.session_state.classifica_list[i+1] = \
-                    st.session_state.classifica_list[i+1], st.session_state.classifica_list[i]
+            if st.button("⬇️", key=f"down_{i}", disabled=(i == 19), use_container_width=True):
+                st.session_state.classifica_list[i], st.session_state.classifica_list[i+1] = st.session_state.classifica_list[i+1], st.session_state.classifica_list[i]
                 st.rerun()
-    
+
     st.success("✅ Tutte le 20 squadre inserite")
-    
-    # ========== PULSANTE SIMULAZIONE ==========
+
     with c2:
         simula_class = st.button("🧮 Simula Classifica", type="primary")
-    
+
     if simula_class:
+        # Il codice di calcolo rimane identico
         with st.spinner("Calcolo classifica..."):
             mappa_reali = {sq: i+1 for i, sq in enumerate(st.session_state.classifica_list)}
             mappe_prev = {}
-            
             for part in PARTECIPANTI:
                 mappa = {}
                 for sq in st.session_state.classifica_list:
@@ -361,7 +304,6 @@ elif pagina == "📋 Classifica":
                             mappa[sq] = pos
                             break
                 mappe_prev[part] = mappa
-            
             punti_class = {}
             for part in PARTECIPANTI:
                 tot = bonus = cc = 0
@@ -370,45 +312,31 @@ elif pagina == "📋 Classifica":
                     prev = mappe_prev[part].get(sq, 99)
                     err = abs(prev - reale)
                     tot += calcola_punteggio_base_squadra(prev, reale)
-                    
                     if err == 0:
-                        if reale == 1:
-                            bonus += 10
-                        elif 2 <= reale <= 4:
-                            bonus += 3
-                        elif 5 <= reale <= 6:
-                            bonus += 2
-                        elif 18 <= reale <= 20:
-                            bonus += 4
-                    
+                        if reale == 1: bonus += 10
+                        elif 2 <= reale <= 4: bonus += 3
+                        elif 5 <= reale <= 6: bonus += 2
+                        elif 18 <= reale <= 20: bonus += 4
                     altri = [mappe_prev[p].get(sq, 99) for p in PARTECIPANTI if p != part]
                     pmc = np.mean(altri)
-                    
                     if abs(prev - pmc) >= SOGLIA_POSIZIONE_CONTROCORRENTE:
-                        if err == 0:
-                            cc += 5
-                        elif err == 1:
-                            cc += 3
-                        elif err > 2 and err > abs(round(pmc) - reale):
-                            cc -= 5
-                
+                        if err == 0: cc += 5
+                        elif err == 1: cc += 3
+                        elif err > 2 and err > abs(round(pmc) - reale): cc -= 5
                 punti_class[part] = tot + bonus + cc
-            
             max_p = max(punti_class.values())
             orac = [p for p, pt in punti_class.items() if pt == max_p]
             if orac:
                 bo = math.ceil(10 / len(orac))
-                for o in orac:
-                    punti_class[o] += bo
-            
+                for o in orac: punti_class[o] += bo
             df_ris = pd.DataFrame(list(punti_class.items()), columns=['Partecipante', 'Assoluti'])
             df_ris = df_ris.sort_values('Assoluti', ascending=False)
             max_ass = df_ris['Assoluti'].max()
             df_ris['Supremi'] = ((df_ris['Assoluti'] / max_ass) * K_FACTOR).round().astype(int) if max_ass > 0 else 0
-            
             st.session_state.risultati_parziali['Classifica'] = df_ris
             st.success("✅ Simulazione completata!")
             st.dataframe(df_ris, use_container_width=True, hide_index=True)
+
 
 
 
