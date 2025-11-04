@@ -115,22 +115,58 @@ st.markdown("""
     /* Compatta layout generale */
     .block-container {padding-top: 1rem; padding-bottom: 1rem;}
     
-    /* Riduce spazio tra le righe */
-    div[data-testid="column"] {padding: 2px 4px;}
+    /* Forza layout orizzontale SEMPRE - impedisce wrap verticale */
+    div[data-testid="column"] {
+        padding: 2px 4px !important;
+        flex-shrink: 0 !important;
+        min-width: fit-content !important;
+    }
+    
+    /* Contenitore row - forza display flex e nowrap */
+    div[data-testid="column"]:first-child {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+    }
     
     /* Pulsanti frecce compatti */
     div[data-testid="column"] button {
-        padding: 4px 8px !important;
-        font-size: 16px !important;
-        min-height: 32px !important;
-        height: 32px !important;
+        padding: 4px 6px !important;
+        font-size: 14px !important;
+        min-height: 28px !important;
+        height: 28px !important;
+        min-width: 28px !important;
+        width: 28px !important;
     }
     
-    /* Forza layout orizzontale su mobile */
-    @media (max-width: 640px) {
+    /* Mobile: layout orizzontale forzato */
+    @media (max-width: 768px) {
+        /* Impedisce il wrapping su mobile */
+        .row-widget.stHorizontal {
+            flex-wrap: nowrap !important;
+            overflow-x: auto !important;
+        }
+        
         div[data-testid="column"] {
+            flex: 0 0 auto !important;
+            min-width: fit-content !important;
+        }
+        
+        /* Nome squadra più compatto */
+        div[data-testid="column"]:first-child {
             flex: 1 1 auto !important;
-            min-width: 0 !important;
+            min-width: 120px !important;
+            max-width: none !important;
+        }
+        
+        /* Pulsanti ancora più piccoli su mobile */
+        div[data-testid="column"] button {
+            padding: 2px 4px !important;
+            font-size: 18px !important;
+            min-height: 30px !important;
+            height: 30px !important;
+            min-width: 30px !important;
+            width: 30px !important;
         }
     }
 </style>
