@@ -2,6 +2,7 @@
 # Layout Ottimizzato per Smartphone + Frecce Compatte
 
 import streamlit as st
+import streamlit.components.v1 as components 
 import pandas as pd
 import numpy as np
 import math
@@ -355,7 +356,9 @@ elif pagina == "📋 Classifica":
     </div>
     """
     
-    st.markdown(html_completo, unsafe_allow_html=True)
+   import streamlit.components.v1 as components
+components.html(html_completo, height=1000, scrolling=True)
+
     
     st.success("✅ Tutte le 20 squadre inserite")
     
