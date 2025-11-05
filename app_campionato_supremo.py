@@ -52,7 +52,7 @@ button[kind="primary"]:has(> div:first-child:contains("✅")) {
 
 # ==================== COSTANTI ====================
 
-INPUT_FILE = 'RiepilogoCampionatoSupremo.xlsx'
+INPUT_FILE = 'Riepilogo-Campionato-Supremo.xlsx'
 K_FACTOR = 25
 SOGLIA_GOL_CONTROCORRENTE = 5
 SOGLIA_POSIZIONE_CONTROCORRENTE = 4
