@@ -52,7 +52,7 @@ button[kind="primary"]:has(> div:first-child:contains("✅")) {
 
 # ==================== COSTANTI ====================
 
-INPUT_FILE = 'Riepilogo-Campionato-Supremo.xlsx'
+INPUT_FILE = 'RiepilogoCampionatoSupremo.xlsx'
 K_FACTOR = 25
 SOGLIA_GOL_CONTROCORRENTE = 5
 SOGLIA_POSIZIONE_CONTROCORRENTE = 4
@@ -103,12 +103,13 @@ def carica_dati_excel():
 # ==================== FUNZIONI CALCOLO ====================
 
 def calcola_punteggio_giocatore(pronosticati, reali):
-    """Calcola punteggio per un giocatore"""
+    """Calcola punteggio per un giocatore - NON PUÒ ESSERE NEGATIVO"""
     if pd.isna(reali) or reali < 3:
         return 0
     errore = abs(pronosticati - reali)
     malus = errore ** 2
-    return max(0, reali - malus)
+    punteggio = reali - malus
+    return max(0, punteggio)  # Garantisce che il punteggio non sia mai negativo
 
 def calcola_punteggio_base_squadra(prevista, reale):
     """Calcola punteggio base squadra"""
@@ -205,7 +206,8 @@ def simula_girone_completo(girone_data, gol_inseriti, partecipanti):
             real = reali[i]
             
             # Punteggio base
-            tot += calcola_punteggio_giocatore(prev, real)
+            punteggio_singolo = calcola_punteggio_giocatore(prev, real)
+            tot += punteggio_singolo
             
             # Bonus capocannoniere
             if real == max(reali) and real >= 3:
@@ -279,6 +281,12 @@ def get_squadre_disponibili(posizione):
              if i != posizione and st.session_state.classifica_list[i] not in [None, "--- Seleziona ---"]]
     return [sq for sq in TUTTE_SQUADRE if sq not in usate]
 
+def aggiorna_classifica(posizione):
+    """Callback per aggiornare la classifica quando cambia una selezione"""
+    if st.session_state.classifica_list[posizione] != "--- Seleziona ---":
+        st.session_state.classifica_modificata = True
+        st.session_state.generale_calcolata = False
+
 def renderizza_pulsante_calcola(label, is_calcolato, is_modificato, help_text):
     """Renderizza pulsante con colore"""
     needs_calc = not is_calcolato or is_modificato
@@ -343,16 +351,17 @@ def pagina_classifica(partecipanti, previsioni_class):
         valore_corrente = st.session_state.classifica_list[i]
         indice = opzioni.index(valore_corrente) if valore_corrente in opzioni else 0
         
-        nuova_squadra = st.selectbox(
+        st.selectbox(
             f"Posizione {i+1}",
             options=opzioni,
             index=indice,
-            key=f"pos_{i}"
+            key=f"select_pos_{i}"
         )
         
-        if nuova_squadra != valore_corrente:
-            st.session_state.classifica_list[i] = nuova_squadra
-            if nuova_squadra != "--- Seleziona ---":
+        nuovo_valore = st.session_state[f"select_pos_{i}"]
+        if nuovo_valore != valore_corrente:
+            st.session_state.classifica_list[i] = nuovo_valore
+            if nuovo_valore != "--- Seleziona ---":
                 st.session_state.classifica_modificata = True
                 st.session_state.generale_calcolata = False
     
@@ -560,6 +569,15 @@ def main():
         st.title("🏆 Campionato Supremo")
         st.markdown("---")
         
+        pagina = st.radio(
+            "📍 Navigazione",
+            ["📊 Dashboard", "📋 Classifica Squadre"] + 
+            [f"⚽ Girone {i}" for i in range(1, 6)] +
+            ["📈 Classifica Generale"]
+        )
+        
+        st.markdown("---")
+        
         st.markdown("### 📊 Stato Sezioni")
         if st.session_state.classifica_calcolata and not st.session_state.classifica_modificata:
             st.success("✅ Classifica")
@@ -576,15 +594,6 @@ def main():
             st.success("✅ Generale")
         else:
             st.warning("⚠️ Generale")
-        
-        st.markdown("---")
-        
-        pagina = st.radio(
-            "📍 Navigazione",
-            ["📊 Dashboard", "📋 Classifica Squadre"] + 
-            [f"⚽ Girone {i}" for i in range(1, 6)] +
-            ["📈 Classifica Generale"]
-        )
     
     # Routing
     if pagina == "📊 Dashboard":
@@ -599,4 +608,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
