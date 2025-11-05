@@ -334,7 +334,7 @@ def pagina_classifica(partecipanti, previsioni_class):
     
     st.info("💡 Seleziona le squadre - Le usate spariscono dai dropdown successivi")
     
-    col1, col2 = st.columns([1, 1])
+    col1, col2, col3 = st.columns([1, 1, 1])
     with col1:
         if st.button("🔄 Reset Classifica"):
             st.session_state.classifica_list = [None] * 20
@@ -342,7 +342,14 @@ def pagina_classifica(partecipanti, previsioni_class):
             st.session_state.classifica_modificata = False
             st.rerun()
     
+    with col2:
+        if st.button("✏️ Modifica Classifica"):
+            st.session_state.classifica_modificata = True
+            st.rerun()
+    
     st.markdown("### Seleziona le squadre")
+    
+    dropdown_abilitati = not st.session_state.classifica_calcolata or st.session_state.classifica_modificata
     
     for i in range(20):
         squadre_disp = get_squadre_disponibili(i)
@@ -355,7 +362,8 @@ def pagina_classifica(partecipanti, previsioni_class):
             f"Posizione {i+1}",
             options=opzioni,
             index=indice,
-            key=f"select_pos_{i}"
+            key=f"select_pos_{i}",
+            disabled=not dropdown_abilitati  # Disabilita se calcolata e non in modifica
         )
         
         nuovo_valore = st.session_state[f"select_pos_{i}"]
@@ -376,7 +384,7 @@ def pagina_classifica(partecipanti, previsioni_class):
     
     st.markdown("---")
     
-    with col2:
+    with col3:
         simula = renderizza_pulsante_calcola(
             "CALCOLA CLASSIFICA",
             st.session_state.classifica_calcolata,
