@@ -1,12 +1,13 @@
 """
-CAMPIONATO SUPREMO - VERSIONE OTTIMIZZATA PER MOBILE
-Streamlit App con dropdown per classifica e sistema tracking stato
+CAMPIONATO SUPREMO - VERSIONE COMPLETA FUNZIONANTE
+Con lettura Excel, logica calcolo completa e sistema semaforo
 """
 
 import streamlit as st
 import pandas as pd
 import numpy as np
 import math
+import os
 
 # ==================== CONFIGURAZIONE PAGINA ====================
 
@@ -37,74 +38,69 @@ button[kind="primary"]:has(> div:first-child:contains("✅")) {
     cursor: not-allowed;
 }
 
-/* Animazione pulse per attirare attenzione */
 @keyframes pulse {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.85; transform: scale(1.02); }
 }
 
-/* Migliora visualizzazione dropdown su mobile */
 @media (max-width: 640px) {
-    .stSelectbox {
-        font-size: 14px;
-    }
-    label {
-        font-size: 13px !important;
-    }
+    .stSelectbox { font-size: 14px; }
+    label { font-size: 13px !important; }
 }
 </style>
 """, unsafe_allow_html=True)
 
 # ==================== COSTANTI ====================
 
-# Liste squadre disponibili
-TUTTE_SQUADRE = [
-    "Napoli", "Inter", "Juventus", "Milan", "Roma", 
-    "Fiorentina", "Atalanta", "Como", "Lazio", "Bologna",
-    "Torino", "Udinese", "Genoa", "Cagliari", "Cremonese",
-    "Parma", "Sassuolo", "Lecce", "Verona", "Pisa"
-]
-
-# Partecipanti
-PARTECIPANTI = ["Andrea", "Carlo", "Francesco", "Giuseppe", "Luca", "Marco"]
-
-# Fogli giocatori
-FOGLI_GIOCATORI = [f"Giocatori_{i}" for i in range(1, 6)]
-
-# Costanti calcolo
+INPUT_FILE = 'Riepilogo-Campionato-Supremo.xlsx'
 K_FACTOR = 25
 SOGLIA_GOL_CONTROCORRENTE = 5
 SOGLIA_POSIZIONE_CONTROCORRENTE = 4
 
-# ==================== INIZIALIZZAZIONE SESSION STATE ====================
+TUTTE_SQUADRE = [
+    "Napoli", "Inter", "Juventus", "Milan", "Roma", "Fiorentina", 
+    "Atalanta", "Como", "Lazio", "Bologna", "Torino", "Udinese", 
+    "Genoa", "Cagliari", "Cremonese", "Parma", "Sassuolo", 
+    "Lecce", "Verona", "Pisa"
+]
 
-def inizializza_session_state():
-    """Inizializza tutte le variabili di stato necessarie"""
-    
-    # Classifica
-    if 'classifica_list' not in st.session_state:
-        st.session_state.classifica_list = [None] * 20
-    if 'classifica_calcolata' not in st.session_state:
-        st.session_state.classifica_calcolata = False
-    if 'classifica_modificata' not in st.session_state:
-        st.session_state.classifica_modificata = False
-    
-    # Gironi (5 gironi)
-    for i in range(1, 6):
-        if f'girone{i}_data' not in st.session_state:
-            st.session_state[f'girone{i}_data'] = {}
-        if f'girone{i}_calcolato' not in st.session_state:
-            st.session_state[f'girone{i}_calcolato'] = False
-        if f'girone{i}_modificato' not in st.session_state:
-            st.session_state[f'girone{i}_modificato'] = False
-    
-    # Generale
-    if 'generale_calcolata' not in st.session_state:
-        st.session_state.generale_calcolata = False
-    if 'risultati_parziali' not in st.session_state:
-        st.session_state.risultati_parziali = {}
+# ==================== CARICAMENTO DATI EXCEL ====================
 
-# ==================== FUNZIONI CALCOLO PUNTEGGI ====================
+@st.cache_data
+def carica_dati_excel():
+    """Carica tutti i dati dal file Excel"""
+    if not os.path.exists(INPUT_FILE):
+        st.error(f"❌ File {INPUT_FILE} non trovato!")
+        return None, None, None
+    
+    try:
+        # Carica classifica
+        df_class = pd.read_excel(INPUT_FILE, sheet_name="Classifica")
+        partecipanti = [col for col in df_class.columns if col not in ['Pos', 'REALE', 'REALI', 'Posizione']]
+        
+        # Crea dizionario previsioni classifica
+        prev_class = {}
+        for idx, row in df_class.iterrows():
+            pos = idx + 1
+            prev_class[pos] = {part: row[part] for part in partecipanti}
+        
+        # Carica tutti i gironi
+        gironi_data = {}
+        for i in range(1, 6):
+            df_girone = pd.read_excel(INPUT_FILE, sheet_name=f"Giocatori_{i}")
+            gironi_data[i] = {
+                'giocatori': df_girone['Giocatore'].tolist(),
+                'reali': df_girone['REALI'].tolist(),
+                'previsioni': {part: df_girone[part].tolist() for part in partecipanti}
+            }
+        
+        return partecipanti, prev_class, gironi_data
+    
+    except Exception as e:
+        st.error(f"❌ Errore nel caricamento: {str(e)}")
+        return None, None, None
+
+# ==================== FUNZIONI CALCOLO ====================
 
 def calcola_punteggio_giocatore(pronosticati, reali):
     """Calcola punteggio per un giocatore"""
@@ -112,336 +108,460 @@ def calcola_punteggio_giocatore(pronosticati, reali):
         return 0
     errore = abs(pronosticati - reali)
     malus = errore ** 2
-    punteggio = max(0, reali - malus)
-    return punteggio
+    return max(0, reali - malus)
 
 def calcola_punteggio_base_squadra(prevista, reale):
-    """Calcola punteggio base per una squadra"""
+    """Calcola punteggio base squadra"""
     errore = abs(prevista - reale)
-    punteggio = max(0, 10 - (errore ** 2))
-    return punteggio
+    return max(0, 10 - (errore ** 2))
+
+def simula_classifica_completa(classifica_list, previsioni_class, partecipanti):
+    """Calcola punteggi classifica con logica completa"""
+    mappa_reali = {sq: i+1 for i, sq in enumerate(classifica_list)}
+    mappe_prev = {}
+    
+    # Crea mappe previsioni
+    for part in partecipanti:
+        mappa = {}
+        for sq in classifica_list:
+            for pos, prev_dict in previsioni_class.items():
+                if prev_dict.get(part) == sq:
+                    mappa[sq] = pos
+                    break
+        mappe_prev[part] = mappa
+    
+    # Calcola punteggi
+    punti_class = {}
+    for part in partecipanti:
+        tot = bonus = cc = 0
+        
+        for sq in classifica_list:
+            reale = mappa_reali[sq]
+            prev = mappe_prev[part].get(sq, 99)
+            err = abs(prev - reale)
+            
+            # Punteggio base
+            tot += calcola_punteggio_base_squadra(prev, reale)
+            
+            # Bonus posizioni strategiche
+            if err == 0:
+                if reale == 1:
+                    bonus += 10
+                elif 2 <= reale <= 4:
+                    bonus += 3
+                elif 5 <= reale <= 6:
+                    bonus += 2
+                elif 18 <= reale <= 20:
+                    bonus += 4
+            
+            # Controcorrente
+            altri = [mappe_prev[p].get(sq, 99) for p in partecipanti if p != part]
+            if altri:
+                pmc = np.mean(altri)
+                if abs(prev - pmc) >= SOGLIA_POSIZIONE_CONTROCORRENTE:
+                    if err == 0:
+                        cc += 5
+                    elif err == 1:
+                        cc += 3
+                    elif err > 2 and err > abs(round(pmc) - reale):
+                        cc -= 5
+        
+        punti_class[part] = tot + bonus + cc
+    
+    # Bonus Oracolo
+    if punti_class:
+        max_p = max(punti_class.values())
+        orac = [p for p, pt in punti_class.items() if pt == max_p]
+        if orac:
+            bo = math.ceil(10 / len(orac))
+            for o in orac:
+                punti_class[o] += bo
+    
+    return punti_class
+
+def simula_girone_completo(girone_data, gol_inseriti, partecipanti):
+    """Calcola punteggi girone"""
+    giocatori = girone_data['giocatori']
+    reali = [gol_inseriti.get(gioc, 0) for gioc in giocatori]
+    
+    punti_girone = {}
+    for part in partecipanti:
+        tot = bonus = cc = 0
+        previsioni_part = girone_data['previsioni'][part]
+        
+        for i, giocatore in enumerate(giocatori):
+            prev = previsioni_part[i]
+            real = reali[i]
+            
+            # Punteggio base
+            tot += calcola_punteggio_giocatore(prev, real)
+            
+            # Bonus capocannoniere
+            if real == max(reali) and real >= 3:
+                if prev == max(previsioni_part):
+                    bonus += 10
+            
+            # Controcorrente
+            altri_prev = [girone_data['previsioni'][p][i] for p in partecipanti if p != part]
+            if altri_prev:
+                pmc = np.mean(altri_prev)
+                err = abs(prev - real)
+                if abs(prev - pmc) >= SOGLIA_GOL_CONTROCORRENTE:
+                    if err == 0:
+                        cc += 5
+                    elif err == 1:
+                        cc += 3
+                    elif err > 2 and err > abs(round(pmc) - real):
+                        cc -= 5
+        
+        punti_girone[part] = tot + bonus + cc
+    
+    return punti_girone
+
+# ==================== SESSION STATE ====================
+
+def inizializza_session_state(partecipanti, gironi_data):
+    """Inizializza session state"""
+    if 'initialized' not in st.session_state:
+        st.session_state.classifica_list = [None] * 20
+        st.session_state.classifica_calcolata = False
+        st.session_state.classifica_modificata = False
+        
+        for i in range(1, 6):
+            if gironi_data and i in gironi_data:
+                # Inizializza con valori REALI dal file
+                st.session_state[f'girone{i}_data'] = {
+                    gioc: int(real) for gioc, real in 
+                    zip(gironi_data[i]['giocatori'], gironi_data[i]['reali'])
+                }
+            else:
+                st.session_state[f'girone{i}_data'] = {}
+            
+            st.session_state[f'girone{i}_calcolato'] = False
+            st.session_state[f'girone{i}_modificato'] = False
+        
+        st.session_state.generale_calcolata = False
+        st.session_state.risultati_parziali = {}
+        st.session_state.initialized = True
 
 # ==================== FUNZIONI UI ====================
 
 def verifica_classifica_completa():
-    """Verifica se tutte le 20 squadre sono state selezionate"""
-    return all(sq is not None and sq != "--- Seleziona ---" for sq in st.session_state.classifica_list)
+    """Verifica se tutte le squadre sono inserite"""
+    return all(sq is not None and sq != "--- Seleziona ---" 
+               for sq in st.session_state.classifica_list)
 
 def get_squadre_disponibili(posizione):
-    """Restituisce le squadre ancora disponibili per una data posizione"""
-    squadre_usate = [
-        st.session_state.classifica_list[i] 
-        for i in range(20) 
-        if i != posizione and st.session_state.classifica_list[i] not in [None, "--- Seleziona ---"]
-    ]
-    return [sq for sq in TUTTE_SQUADRE if sq not in squadre_usate]
+    """Restituisce squadre disponibili"""
+    usate = [st.session_state.classifica_list[i] for i in range(20) 
+             if i != posizione and st.session_state.classifica_list[i] not in [None, "--- Seleziona ---"]]
+    return [sq for sq in TUTTE_SQUADRE if sq not in usate]
 
 def renderizza_pulsante_calcola(label, is_calcolato, is_modificato, help_text):
-    """Renderizza un pulsante calcola con colore appropriato"""
+    """Renderizza pulsante con colore"""
     needs_calc = not is_calcolato or is_modificato
-    
-    if needs_calc:
-        icona = "⚠️"
-        testo = f"{icona} {label}"
-        disabled = False
-        help_msg = help_text + " - Dati modificati o mai calcolati"
-    else:
-        icona = "✅"
-        testo = f"{icona} {label} (Aggiornato)"
-        disabled = True
-        help_msg = "Già calcolato e aggiornato"
+    icona = "⚠️" if needs_calc else "✅"
+    testo = f"{icona} {label}" if needs_calc else f"{icona} {label} (Aggiornato)"
     
     return st.button(
         testo,
         type="primary",
-        disabled=disabled,
-        help=help_msg,
+        disabled=not needs_calc,
+        help=help_text,
         use_container_width=True
     )
 
-# ==================== PAGINA DASHBOARD ====================
+# ==================== PAGINE ====================
 
 def pagina_dashboard():
-    """Pagina principale dashboard"""
+    """Dashboard principale"""
     st.title("🏆 Campionato Supremo")
     st.markdown("---")
     
     st.markdown("""
     ## Benvenuto nel Campionato Supremo! ⚽
     
-    Questa applicazione ti permette di gestire e calcolare i punteggi del campionato.
+    ### 📋 Sezioni:
+    1. **Classifica Squadre** - Seleziona ordine squadre
+    2. **Gironi 1-5** - Inserisci/modifica gol giocatori
+    3. **Classifica Generale** - Risultati finali
     
-    ### 📋 Sezioni Disponibili:
-    
-    1. **Classifica Squadre** - Inserisci l'ordine finale delle squadre
-    2. **Gironi 1-5** - Inserisci i gol segnati dai giocatori
-    3. **Classifica Generale** - Visualizza la classifica finale e le statistiche
-    
-    ### 🎯 Come Usare l'App:
-    
-    1. Vai su **Classifica Squadre** e seleziona le squadre nei dropdown
-    2. Vai sui **Gironi** e inserisci i gol di ogni giocatore
-    3. Clicca **CALCOLA** in ogni sezione (il pulsante diventa verde quando fatto)
-    4. Vai su **Classifica Generale** per vedere i risultati finali
+    ### 🎯 Come Usare:
+    1. Vai su **Classifica Squadre** e seleziona nei dropdown
+    2. Vai sui **Gironi** (i gol reali sono già caricati, modificali se serve)
+    3. Clicca **CALCOLA** in ogni sezione (rosso → verde)
+    4. Vai su **Classifica Generale** per i risultati
     
     ### 🔴 🟢 Sistema Semaforo:
-    
-    - **Pulsante ROSSO con ⚠️** = Devi calcolare (dati nuovi o modificati)
-    - **Pulsante VERDE con ✅** = Già calcolato e aggiornato
-    
-    **Inizia dalla Classifica Squadre!** 👈
+    - **ROSSO ⚠️** = Devi calcolare
+    - **VERDE ✅** = Già calcolato
     """)
-    
-    # Mostra stato generale nella sidebar
-    with st.sidebar:
-        st.markdown("### 📊 Stato Sezioni")
-        
-        # Classifica
-        if st.session_state.classifica_calcolata and not st.session_state.classifica_modificata:
-            st.success("✅ Classifica")
-        else:
-            st.warning("⚠️ Classifica")
-        
-        # Gironi
-        for i in range(1, 6):
-            if st.session_state[f'girone{i}_calcolato'] and not st.session_state[f'girone{i}_modificato']:
-                st.success(f"✅ Girone {i}")
-            else:
-                st.warning(f"⚠️ Girone {i}")
-        
-        # Generale
-        if st.session_state.generale_calcolata:
-            st.success("✅ Generale")
-        else:
-            st.warning("⚠️ Generale")
 
-# ==================== PAGINA CLASSIFICA ====================
-
-def pagina_classifica():
-    """Pagina per l'inserimento della classifica"""
+def pagina_classifica(partecipanti, previsioni_class):
+    """Pagina classifica"""
     st.title("📋 Classifica Squadre")
     st.markdown("---")
     
-    st.info("💡 **Seleziona le squadre nei dropdown** - Le squadre già usate non appaiono nelle posizioni successive")
+    st.info("💡 Seleziona le squadre - Le usate spariscono dai dropdown successivi")
     
-    # Colonne per i pulsanti principali
     col1, col2 = st.columns([1, 1])
-    
     with col1:
-        if st.button("🔄 Reset Classifica", help="Cancella tutte le selezioni"):
+        if st.button("🔄 Reset Classifica"):
             st.session_state.classifica_list = [None] * 20
             st.session_state.classifica_calcolata = False
             st.session_state.classifica_modificata = False
-            st.session_state.generale_calcolata = False
             st.rerun()
     
-    st.markdown("### Seleziona le squadre in ordine")
+    st.markdown("### Seleziona le squadre")
     
-    # Rendering dei 20 dropdown
     for i in range(20):
         squadre_disp = get_squadre_disponibili(i)
         opzioni = ["--- Seleziona ---"] + squadre_disp
         
-        # Trova l'indice corrente
         valore_corrente = st.session_state.classifica_list[i]
-        if valore_corrente in opzioni:
-            indice = opzioni.index(valore_corrente)
-        else:
-            indice = 0
+        indice = opzioni.index(valore_corrente) if valore_corrente in opzioni else 0
         
-        # Selectbox
         nuova_squadra = st.selectbox(
             f"Posizione {i+1}",
             options=opzioni,
             index=indice,
-            key=f"pos_{i}",
-            help=f"Seleziona la squadra che finirà {i+1}ª"
+            key=f"pos_{i}"
         )
         
-        # Detect cambiamento
         if nuova_squadra != valore_corrente:
             st.session_state.classifica_list[i] = nuova_squadra
             if nuova_squadra != "--- Seleziona ---":
                 st.session_state.classifica_modificata = True
                 st.session_state.generale_calcolata = False
     
-    # Verifica completezza
     completa = verifica_classifica_completa()
     
     if completa:
-        st.success("✅ Tutte le 20 squadre sono state inserite!")
+        st.success("✅ Tutte le 20 squadre inserite!")
     else:
-        squadre_mancanti = 20 - sum(1 for sq in st.session_state.classifica_list if sq not in [None, "--- Seleziona ---"])
-        st.warning(f"⚠️ Mancano ancora {squadre_mancanti} squadre da inserire")
+        mancanti = 20 - sum(1 for sq in st.session_state.classifica_list 
+                           if sq not in [None, "--- Seleziona ---"])
+        st.warning(f"⚠️ Mancano {mancanti} squadre")
     
     st.markdown("---")
     
-    # Pulsante Calcola
     with col2:
         simula = renderizza_pulsante_calcola(
             "CALCOLA CLASSIFICA",
             st.session_state.classifica_calcolata,
             st.session_state.classifica_modificata,
-            "Calcola i punteggi della classifica"
+            "Calcola punteggi classifica"
         )
     
     if simula and completa:
-        with st.spinner("🔄 Calcolo in corso..."):
-            # TODO: Implementare logica calcolo classifica completa
-            # Per ora simulazione base
+        with st.spinner("🔄 Calcolo..."):
+            punti = simula_classifica_completa(
+                st.session_state.classifica_list,
+                previsioni_class,
+                partecipanti
+            )
+            
+            df_ris = pd.DataFrame(list(punti.items()), columns=['Partecipante', 'Punti'])
+            df_ris = df_ris.sort_values('Punti', ascending=False).reset_index(drop=True)
+            
+            st.session_state.risultati_parziali['Classifica'] = df_ris
             st.session_state.classifica_calcolata = True
             st.session_state.classifica_modificata = False
+            
             st.success("✅ Classifica calcolata!")
+            st.dataframe(df_ris, use_container_width=True, hide_index=True)
             st.balloons()
 
-# ==================== PAGINA GIRONE ====================
-
-def pagina_girone(num_girone):
-    """Pagina per l'inserimento gol di un girone"""
+def pagina_girone(num_girone, partecipanti, gironi_data):
+    """Pagina girone"""
     st.title(f"⚽ Girone {num_girone}")
     st.markdown("---")
     
-    st.info(f"💡 **Inserisci i gol** segnati da ogni giocatore del Girone {num_girone}")
+    if num_girone not in gironi_data:
+        st.error(f"❌ Dati Girone {num_girone} non disponibili")
+        return
     
-    # Esempio di giocatori (sostituisci con dati reali)
-    giocatori_esempio = [f"Giocatore {i}" for i in range(1, 21)]
+    girone = gironi_data[num_girone]
+    giocatori = girone['giocatori']
     
-    # Colonne per organizzazione
+    st.info(f"💡 I gol reali sono già caricati - Modificali se necessario")
+    
     col1, col2 = st.columns(2)
     
-    for idx, giocatore in enumerate(giocatori_esempio):
-        with col1 if idx < 10 else col2:
+    for idx, giocatore in enumerate(giocatori):
+        default_val = st.session_state[f'girone{num_girone}_data'].get(giocatore, 0)
+        
+        with col1 if idx < len(giocatori)//2 else col2:
             gol = st.number_input(
                 giocatore,
                 min_value=0,
                 max_value=50,
-                value=st.session_state[f'girone{num_girone}_data'].get(giocatore, 0),
-                key=f"girone{num_girone}_{giocatore}",
-                help=f"Gol segnati da {giocatore}"
+                value=int(default_val),
+                key=f"g{num_girone}_{giocatore}"
             )
             
-            # Detect cambiamento
-            if gol != st.session_state[f'girone{num_girone}_data'].get(giocatore, 0):
+            if gol != default_val:
                 st.session_state[f'girone{num_girone}_data'][giocatore] = gol
                 st.session_state[f'girone{num_girone}_modificato'] = True
                 st.session_state.generale_calcolata = False
     
     st.markdown("---")
     
-    # Pulsante Calcola
     col_btn1, col_btn2 = st.columns([1, 1])
-    
     with col_btn2:
         calcola = renderizza_pulsante_calcola(
             f"CALCOLA GIRONE {num_girone}",
             st.session_state[f'girone{num_girone}_calcolato'],
             st.session_state[f'girone{num_girone}_modificato'],
-            f"Calcola i punteggi del Girone {num_girone}"
+            f"Calcola punteggi Girone {num_girone}"
         )
     
     if calcola:
-        with st.spinner("🔄 Calcolo in corso..."):
-            # TODO: Implementare logica calcolo girone
+        with st.spinner("🔄 Calcolo..."):
+            punti = simula_girone_completo(
+                girone,
+                st.session_state[f'girone{num_girone}_data'],
+                partecipanti
+            )
+            
+            df_ris = pd.DataFrame(list(punti.items()), columns=['Partecipante', 'Punti'])
+            df_ris = df_ris.sort_values('Punti', ascending=False).reset_index(drop=True)
+            
+            st.session_state.risultati_parziali[f'Girone{num_girone}'] = df_ris
             st.session_state[f'girone{num_girone}_calcolato'] = True
             st.session_state[f'girone{num_girone}_modificato'] = False
+            
             st.success(f"✅ Girone {num_girone} calcolato!")
+            st.dataframe(df_ris, use_container_width=True, hide_index=True)
 
-# ==================== PAGINA CLASSIFICA GENERALE ====================
-
-def pagina_generale():
-    """Pagina classifica generale e statistiche"""
+def pagina_generale(partecipanti):
+    """Classifica generale"""
     st.title("📊 Classifica Generale")
     st.markdown("---")
     
-    # Verifica se tutti i parziali sono calcolati
     tutti_ok = (
         st.session_state.classifica_calcolata and 
         not st.session_state.classifica_modificata and
-        all(st.session_state[f'girone{i}_calcolato'] and not st.session_state[f'girone{i}_modificato'] for i in range(1, 6))
+        all(st.session_state[f'girone{i}_calcolato'] and 
+            not st.session_state[f'girone{i}_modificato'] for i in range(1, 6))
     )
     
     if not tutti_ok:
-        st.warning("⚠️ **Attenzione**: Alcuni calcoli parziali non sono aggiornati!")
-        st.markdown("### Stato Calcoli:")
-        
-        # Mostra stato dettagliato
+        st.warning("⚠️ Alcuni calcoli non sono aggiornati!")
         if not st.session_state.classifica_calcolata or st.session_state.classifica_modificata:
-            st.error("❌ Classifica Squadre non calcolata o modificata")
+            st.error("❌ Classifica Squadre")
         else:
-            st.success("✅ Classifica Squadre aggiornata")
+            st.success("✅ Classifica Squadre")
         
         for i in range(1, 6):
             if not st.session_state[f'girone{i}_calcolato'] or st.session_state[f'girone{i}_modificato']:
-                st.error(f"❌ Girone {i} non calcolato o modificato")
+                st.error(f"❌ Girone {i}")
             else:
-                st.success(f"✅ Girone {i} aggiornato")
+                st.success(f"✅ Girone {i}")
     
     st.markdown("---")
     
-    # Pulsante Calcola Generale
     col1, col2, col3 = st.columns([1, 2, 1])
-    
     with col2:
         calcola_gen = renderizza_pulsante_calcola(
             "CALCOLA CLASSIFICA GENERALE",
             st.session_state.generale_calcolata,
             not tutti_ok,
-            "Calcola la classifica generale finale"
+            "Calcola classifica finale"
         )
     
     if calcola_gen and tutti_ok:
-        with st.spinner("🔄 Calcolo classifica generale..."):
-            # TODO: Implementare calcolo generale completo
+        with st.spinner("🔄 Calcolo generale..."):
+            # Somma tutti i punteggi parziali
+            totali = {part: 0 for part in partecipanti}
+            
+            for key, df in st.session_state.risultati_parziali.items():
+                for _, row in df.iterrows():
+                    totali[row['Partecipante']] += row['Punti']
+            
+            # Calcola Supremi
+            df_finale = pd.DataFrame(list(totali.items()), columns=['Partecipante', 'Assoluti'])
+            df_finale = df_finale.sort_values('Assoluti', ascending=False).reset_index(drop=True)
+            
+            max_ass = df_finale['Assoluti'].max()
+            df_finale['Supremi'] = ((df_finale['Assoluti'] / max_ass) * K_FACTOR).round().astype(int)
+            
+            st.session_state.risultati_parziali['Classifica_Finale'] = df_finale
             st.session_state.generale_calcolata = True
+            
             st.success("✅ Classifica Generale calcolata!")
             st.balloons()
     
-    # Mostra risultati se disponibili
-    if st.session_state.generale_calcolata and 'Classifica_Finale' in st.session_state.risultati_parziali:
+    if 'Classifica_Finale' in st.session_state.risultati_parziali:
         st.markdown("### 🏆 Classifica Finale")
         st.dataframe(
             st.session_state.risultati_parziali['Classifica_Finale'],
             use_container_width=True,
             hide_index=True
         )
+        
+        # Mostra dettagli parziali
+        with st.expander("📊 Dettagli Parziali"):
+            for key, df in st.session_state.risultati_parziali.items():
+                if key != 'Classifica_Finale':
+                    st.markdown(f"#### {key}")
+                    st.dataframe(df, use_container_width=True, hide_index=True)
 
 # ==================== MAIN ====================
 
 def main():
-    """Funzione principale dell'app"""
+    """Main app"""
+    # Carica dati
+    partecipanti, previsioni_class, gironi_data = carica_dati_excel()
     
-    # Inizializza session state
-    inizializza_session_state()
+    if not partecipanti:
+        st.error("❌ Impossibile caricare i dati. Verifica che il file Excel sia presente.")
+        return
     
-    # Sidebar navigazione
+    # Inizializza
+    inizializza_session_state(partecipanti, gironi_data)
+    
+    # Sidebar
     with st.sidebar:
         st.title("🏆 Campionato Supremo")
         st.markdown("---")
         
+        st.markdown("### 📊 Stato Sezioni")
+        if st.session_state.classifica_calcolata and not st.session_state.classifica_modificata:
+            st.success("✅ Classifica")
+        else:
+            st.warning("⚠️ Classifica")
+        
+        for i in range(1, 6):
+            if st.session_state[f'girone{i}_calcolato'] and not st.session_state[f'girone{i}_modificato']:
+                st.success(f"✅ Girone {i}")
+            else:
+                st.warning(f"⚠️ Girone {i}")
+        
+        if st.session_state.generale_calcolata:
+            st.success("✅ Generale")
+        else:
+            st.warning("⚠️ Generale")
+        
+        st.markdown("---")
+        
         pagina = st.radio(
             "📍 Navigazione",
-            [
-                "📊 Dashboard",
-                "📋 Classifica Squadre",
-                "⚽ Girone 1",
-                "⚽ Girone 2",
-                "⚽ Girone 3",
-                "⚽ Girone 4",
-                "⚽ Girone 5",
-                "📈 Classifica Generale"
-            ]
+            ["📊 Dashboard", "📋 Classifica Squadre"] + 
+            [f"⚽ Girone {i}" for i in range(1, 6)] +
+            ["📈 Classifica Generale"]
         )
     
-    # Routing pagine
+    # Routing
     if pagina == "📊 Dashboard":
         pagina_dashboard()
     elif pagina == "📋 Classifica Squadre":
-        pagina_classifica()
+        pagina_classifica(partecipanti, previsioni_class)
     elif pagina.startswith("⚽ Girone"):
         num = int(pagina.split()[-1])
-        pagina_girone(num)
+        pagina_girone(num, partecipanti, gironi_data)
     elif pagina == "📈 Classifica Generale":
-        pagina_generale()
+        pagina_generale(partecipanti)
 
 if __name__ == "__main__":
     main()
