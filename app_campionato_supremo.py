@@ -1,6 +1,6 @@
 """
-CAMPIONATO SUPREMO - VERSIONE COMPLETA FUNZIONANTE
-Con lettura Excel, logica calcolo completa e sistema semaforo
+CAMPIONATO SUPREMO - VERSIONE CORRETTA BUG
+Fix: Doppia colonna, pulsante verde immediato, tabella persistente
 """
 
 import streamlit as st
@@ -52,7 +52,7 @@ button[kind="primary"]:has(> div:first-child:contains("✅")) {
 
 # ==================== COSTANTI ====================
 
-INPUT_FILE = 'Riepilogo-Campionato-Supremo.xlsx'
+INPUT_FILE = 'RiepilogoCampionatoSupremo.xlsx'
 K_FACTOR = 25
 SOGLIA_GOL_CONTROCORRENTE = 5
 SOGLIA_POSIZIONE_CONTROCORRENTE = 4
@@ -116,7 +116,7 @@ def calcola_punteggio_base_squadra(prevista, reale):
     return max(0, 10 - (errore ** 2))
 
 def simula_classifica_completa(classifica_list, previsioni_class, partecipanti):
-    """Calcola punteggi classifica con logica completa"""
+    """Calcola punteggi classifica - RITORNA DATAFRAME CON ASSOLUTI E SUPREMI"""
     mappa_reali = {sq: i+1 for i, sq in enumerate(classifica_list)}
     mappe_prev = {}
     
@@ -177,10 +177,21 @@ def simula_classifica_completa(classifica_list, previsioni_class, partecipanti):
             for o in orac:
                 punti_class[o] += bo
     
-    return punti_class
+    # Crea DataFrame con Assoluti e Supremi
+    df_ris = pd.DataFrame(list(punti_class.items()), columns=['Partecipante', 'Assoluti'])
+    df_ris = df_ris.sort_values('Assoluti', ascending=False).reset_index(drop=True)
+    
+    # Calcola Supremi
+    max_ass = df_ris['Assoluti'].max()
+    if max_ass > 0:
+        df_ris['Supremi'] = ((df_ris['Assoluti'] / max_ass) * K_FACTOR).round().astype(int)
+    else:
+        df_ris['Supremi'] = 0
+    
+    return df_ris
 
 def simula_girone_completo(girone_data, gol_inseriti, partecipanti):
-    """Calcola punteggi girone"""
+    """Calcola punteggi girone - RITORNA DATAFRAME CON ASSOLUTI E SUPREMI"""
     giocatori = girone_data['giocatori']
     reali = [gol_inseriti.get(gioc, 0) for gioc in giocatori]
     
@@ -216,7 +227,18 @@ def simula_girone_completo(girone_data, gol_inseriti, partecipanti):
         
         punti_girone[part] = tot + bonus + cc
     
-    return punti_girone
+    # Crea DataFrame con Assoluti e Supremi
+    df_ris = pd.DataFrame(list(punti_girone.items()), columns=['Partecipante', 'Assoluti'])
+    df_ris = df_ris.sort_values('Assoluti', ascending=False).reset_index(drop=True)
+    
+    # Calcola Supremi
+    max_ass = df_ris['Assoluti'].max()
+    if max_ass > 0:
+        df_ris['Supremi'] = ((df_ris['Assoluti'] / max_ass) * K_FACTOR).round().astype(int)
+    else:
+        df_ris['Supremi'] = 0
+    
+    return df_ris
 
 # ==================== SESSION STATE ====================
 
@@ -355,22 +377,25 @@ def pagina_classifica(partecipanti, previsioni_class):
     
     if simula and completa:
         with st.spinner("🔄 Calcolo..."):
-            punti = simula_classifica_completa(
+            df_ris = simula_classifica_completa(
                 st.session_state.classifica_list,
                 previsioni_class,
                 partecipanti
             )
             
-            df_ris = pd.DataFrame(list(punti.items()), columns=['Partecipante', 'Punti'])
-            df_ris = df_ris.sort_values('Punti', ascending=False).reset_index(drop=True)
-            
             st.session_state.risultati_parziali['Classifica'] = df_ris
             st.session_state.classifica_calcolata = True
             st.session_state.classifica_modificata = False
-            
-            st.success("✅ Classifica calcolata!")
-            st.dataframe(df_ris, use_container_width=True, hide_index=True)
-            st.balloons()
+        
+        # FUORI dallo spinner per persistenza
+        st.success("✅ Classifica calcolata!")
+        st.dataframe(df_ris, use_container_width=True, hide_index=True)
+        st.balloons()
+    
+    # Mostra risultati se già calcolati (anche senza ricalcolare)
+    elif st.session_state.classifica_calcolata and 'Classifica' in st.session_state.risultati_parziali:
+        st.markdown("### 📊 Risultati Classifica")
+        st.dataframe(st.session_state.risultati_parziali['Classifica'], use_container_width=True, hide_index=True)
 
 def pagina_girone(num_girone, partecipanti, gironi_data):
     """Pagina girone"""
@@ -418,21 +443,24 @@ def pagina_girone(num_girone, partecipanti, gironi_data):
     
     if calcola:
         with st.spinner("🔄 Calcolo..."):
-            punti = simula_girone_completo(
+            df_ris = simula_girone_completo(
                 girone,
                 st.session_state[f'girone{num_girone}_data'],
                 partecipanti
             )
             
-            df_ris = pd.DataFrame(list(punti.items()), columns=['Partecipante', 'Punti'])
-            df_ris = df_ris.sort_values('Punti', ascending=False).reset_index(drop=True)
-            
             st.session_state.risultati_parziali[f'Girone{num_girone}'] = df_ris
             st.session_state[f'girone{num_girone}_calcolato'] = True
             st.session_state[f'girone{num_girone}_modificato'] = False
-            
-            st.success(f"✅ Girone {num_girone} calcolato!")
-            st.dataframe(df_ris, use_container_width=True, hide_index=True)
+        
+        # FUORI dallo spinner
+        st.success(f"✅ Girone {num_girone} calcolato!")
+        st.dataframe(df_ris, use_container_width=True, hide_index=True)
+    
+    # Mostra risultati se già calcolati
+    elif st.session_state[f'girone{num_girone}_calcolato'] and f'Girone{num_girone}' in st.session_state.risultati_parziali:
+        st.markdown(f"### 📊 Risultati Girone {num_girone}")
+        st.dataframe(st.session_state.risultati_parziali[f'Girone{num_girone}'], use_container_width=True, hide_index=True)
 
 def pagina_generale(partecipanti):
     """Classifica generale"""
@@ -472,26 +500,32 @@ def pagina_generale(partecipanti):
     
     if calcola_gen and tutti_ok:
         with st.spinner("🔄 Calcolo generale..."):
-            # Somma tutti i punteggi parziali
-            totali = {part: 0 for part in partecipanti}
+            # Somma tutti i punteggi ASSOLUTI parziali
+            totali_assoluti = {part: 0 for part in partecipanti}
             
             for key, df in st.session_state.risultati_parziali.items():
                 for _, row in df.iterrows():
-                    totali[row['Partecipante']] += row['Punti']
+                    totali_assoluti[row['Partecipante']] += row['Assoluti']
             
-            # Calcola Supremi
-            df_finale = pd.DataFrame(list(totali.items()), columns=['Partecipante', 'Assoluti'])
+            # Crea DataFrame finale
+            df_finale = pd.DataFrame(list(totali_assoluti.items()), columns=['Partecipante', 'Assoluti'])
             df_finale = df_finale.sort_values('Assoluti', ascending=False).reset_index(drop=True)
             
+            # Calcola Supremi
             max_ass = df_finale['Assoluti'].max()
-            df_finale['Supremi'] = ((df_finale['Assoluti'] / max_ass) * K_FACTOR).round().astype(int)
+            if max_ass > 0:
+                df_finale['Supremi'] = ((df_finale['Assoluti'] / max_ass) * K_FACTOR).round().astype(int)
+            else:
+                df_finale['Supremi'] = 0
             
             st.session_state.risultati_parziali['Classifica_Finale'] = df_finale
             st.session_state.generale_calcolata = True
-            
-            st.success("✅ Classifica Generale calcolata!")
-            st.balloons()
+        
+        # FUORI dallo spinner
+        st.success("✅ Classifica Generale calcolata!")
+        st.balloons()
     
+    # Mostra risultati
     if 'Classifica_Finale' in st.session_state.risultati_parziali:
         st.markdown("### 🏆 Classifica Finale")
         st.dataframe(
