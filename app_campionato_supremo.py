@@ -1,6 +1,6 @@
 """
-CAMPIONATO SUPREMO - VERSIONE CORRETTA BUG
-Fix: Punteggi negativi giocatori, Supremi sommati (non ricalcolati)
+CAMPIONATO SUPREMO - VERSIONE CORRETTA BUG CUMULO
+Fix: Reset risultati_parziali quando si ricalcolano classifiche parziali
 """
 
 import streamlit as st
@@ -109,7 +109,7 @@ def calcola_punteggio_giocatore(pronosticati, reali):
     errore = abs(pronosticati - reali)
     malus = errore ** 2
     punteggio = reali - malus
-    return max(0, punteggio)  # Garantisce che il punteggio non sia mai negativo
+    return max(0, punteggio)
 
 def calcola_punteggio_base_squadra(prevista, reale):
     """Calcola punteggio base squadra"""
@@ -345,11 +345,19 @@ def pagina_classifica(partecipanti, previsioni_class):
             st.session_state.classifica_list = [None] * 20
             st.session_state.classifica_calcolata = False
             st.session_state.classifica_modificata = False
+            # FIX: Rimuovi la Classifica_Finale quando resetti la classifica
+            if 'Classifica_Finale' in st.session_state.risultati_parziali:
+                del st.session_state.risultati_parziali['Classifica_Finale']
+            st.session_state.generale_calcolata = False
             st.rerun()
     
     with col2:
         if st.button("✏️ Modifica Classifica"):
             st.session_state.classifica_modificata = True
+            # FIX: Invalida la Classifica_Finale quando modifichi
+            if 'Classifica_Finale' in st.session_state.risultati_parziali:
+                del st.session_state.risultati_parziali['Classifica_Finale']
+            st.session_state.generale_calcolata = False
             st.rerun()
     
     st.markdown("### Seleziona le squadre")
@@ -376,6 +384,9 @@ def pagina_classifica(partecipanti, previsioni_class):
             st.session_state.classifica_list[i] = nuovo_valore
             if nuovo_valore != "--- Seleziona ---":
                 st.session_state.classifica_modificata = True
+                # FIX: Invalida la Classifica_Finale quando cambi una posizione
+                if 'Classifica_Finale' in st.session_state.risultati_parziali:
+                    del st.session_state.risultati_parziali['Classifica_Finale']
                 st.session_state.generale_calcolata = False
     
     completa = verifica_classifica_completa()
@@ -408,6 +419,10 @@ def pagina_classifica(partecipanti, previsioni_class):
             st.session_state.risultati_parziali['Classifica'] = df_ris
             st.session_state.classifica_calcolata = True
             st.session_state.classifica_modificata = False
+            # FIX: Invalida la Classifica_Finale quando ricalcoli una parziale
+            if 'Classifica_Finale' in st.session_state.risultati_parziali:
+                del st.session_state.risultati_parziali['Classifica_Finale']
+            st.session_state.generale_calcolata = False
         
         st.success("✅ Classifica calcolata!")
         st.dataframe(df_ris, use_container_width=True, hide_index=True)
@@ -448,6 +463,9 @@ def pagina_girone(num_girone, partecipanti, gironi_data):
             if gol != default_val:
                 st.session_state[f'girone{num_girone}_data'][giocatore] = gol
                 st.session_state[f'girone{num_girone}_modificato'] = True
+                # FIX: Invalida la Classifica_Finale quando modifichi un girone
+                if 'Classifica_Finale' in st.session_state.risultati_parziali:
+                    del st.session_state.risultati_parziali['Classifica_Finale']
                 st.session_state.generale_calcolata = False
     
     st.markdown("---")
@@ -472,6 +490,10 @@ def pagina_girone(num_girone, partecipanti, gironi_data):
             st.session_state.risultati_parziali[f'Girone{num_girone}'] = df_ris
             st.session_state[f'girone{num_girone}_calcolato'] = True
             st.session_state[f'girone{num_girone}_modificato'] = False
+            # FIX: Invalida la Classifica_Finale quando ricalcoli un girone
+            if 'Classifica_Finale' in st.session_state.risultati_parziali:
+                del st.session_state.risultati_parziali['Classifica_Finale']
+            st.session_state.generale_calcolata = False
         
         st.success(f"✅ Girone {num_girone} calcolato!")
         st.dataframe(df_ris, use_container_width=True, hide_index=True)
@@ -518,14 +540,19 @@ def pagina_generale(partecipanti):
     
     if calcola_gen and tutti_ok:
         with st.spinner("🔄 Calcolo generale..."):
-            # FIX: Somma i SUPREMI parziali, non ricalcolarli
+            # FIX DEFINITIVO: Somma SOLO le 6 classifiche parziali (non Classifica_Finale)
             totali_assoluti = {part: 0 for part in partecipanti}
             totali_supremi = {part: 0 for part in partecipanti}
             
-            for key, df in st.session_state.risultati_parziali.items():
-                for _, row in df.iterrows():
-                    totali_assoluti[row['Partecipante']] += row['Assoluti']
-                    totali_supremi[row['Partecipante']] += row['Supremi']
+            # Lista esplicita delle chiavi da sommare (6 sezioni)
+            chiavi_parziali = ['Classifica', 'Girone1', 'Girone2', 'Girone3', 'Girone4', 'Girone5']
+            
+            for key in chiavi_parziali:
+                if key in st.session_state.risultati_parziali:
+                    df = st.session_state.risultati_parziali[key]
+                    for _, row in df.iterrows():
+                        totali_assoluti[row['Partecipante']] += row['Assoluti']
+                        totali_supremi[row['Partecipante']] += row['Supremi']
             
             # Crea DataFrame finale con somma Assoluti E Supremi
             df_finale = pd.DataFrame({
